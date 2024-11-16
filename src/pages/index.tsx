@@ -1,17 +1,36 @@
 import { useState, useEffect } from 'react'
-import { Box, Button, VStack, Text, useToast, Table, Thead, Tbody, Tr, Th, Td, Link, Spinner } from '@chakra-ui/react'
+import {
+  Box,
+  Button,
+  VStack,
+  Text,
+  useToast,
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td,
+  Link,
+  Spinner,
+  Input,
+  FormControl,
+  FormLabel,
+  FormHelperText,
+} from '@chakra-ui/react'
 import { useRouter } from 'next/router'
 import { Contract, BrowserProvider } from 'ethers'
 import { useAppKitAccount, useAppKitProvider } from '@reown/appkit/react'
 import GoFactoryAbi from '../utils/GoFactory.json'
 import NextLink from 'next/link'
 
-const FACTORY_ADDRESS = '0x8142F414462f8d17060C4b5a60b8C1a06B75040F'
+const FACTORY_ADDRESS = GoFactoryAbi.address
 
 export default function Homepage() {
   const [isLoading, setIsLoading] = useState(false)
   const [games, setGames] = useState<{ address: string; id: number }[]>([])
   const [loadingGames, setLoadingGames] = useState(true)
+  const [opponentAddress, setOpponentAddress] = useState('')
   const router = useRouter()
   const toast = useToast()
   const { address, isConnected } = useAppKitAccount()
@@ -72,6 +91,19 @@ export default function Homepage() {
       return
     }
 
+    if (!opponentAddress) {
+      toast({
+        title: 'Missing opponent',
+        description: 'Please enter an opponent address',
+        status: 'error',
+        position: 'bottom',
+        variant: 'subtle',
+        duration: 9000,
+        isClosable: true,
+      })
+      return
+    }
+
     try {
       setIsLoading(true)
 
@@ -80,11 +112,9 @@ export default function Homepage() {
 
       const factory = new Contract(FACTORY_ADDRESS, GoFactoryAbi.abi, signer)
 
-      // Create game with current user as both players (for testing)
-      const tx = await factory.createGame(address, address)
+      const tx = await factory.createGame(address, opponentAddress)
       const receipt = await tx.wait()
 
-      // Find the GameCreated event
       const event = receipt.logs.find((log: any) => {
         try {
           return factory.interface.parseLog({ topics: log.topics, data: log.data })?.name === 'GameCreated'
@@ -100,7 +130,6 @@ export default function Homepage() {
         })
         const gameAddress = parsedEvent?.args?.gameAddress
 
-        // Redirect to game page
         router.push(`/${gameAddress}`)
       }
     } catch (error) {
@@ -122,7 +151,7 @@ export default function Homepage() {
   const renderGamesList = () => {
     if (loadingGames) {
       return (
-        <VStack spacing={4} mt={8}>
+        <VStack spacing={2} mt={8}>
           <Spinner size="xl" />
           <Text>Loading games...</Text>
         </VStack>
@@ -131,42 +160,42 @@ export default function Homepage() {
 
     if (games.length === 0) {
       return (
-        <VStack spacing={4} mt={8}>
+        <VStack spacing={2} mt={8}>
           <Text>No games found. Start a new game above!</Text>
         </VStack>
       )
     }
 
     return (
-      <VStack spacing={4} mt={8} width="full">
-        <Text fontSize="xl" fontWeight="bold">
+      <VStack spacing={2} mt={8} width="full">
+        {/* <Text fontSize="xl" fontWeight="bold">
           Existing Games
-        </Text>
+        </Text> */}
         <Box width="full" overflowX="auto">
           <Table variant="simple">
             <Thead>
               <Tr>
-                <Th>Game ID</Th>
-                <Th>Contract Address</Th>
-                <Th>Action</Th>
+                {/* <Th>Game ID</Th> */}
+                <Th>Existing Games</Th>
+                {/* <Th>Action</Th> */}
               </Tr>
             </Thead>
             <Tbody>
               {games.map((game) => (
                 <Tr key={game.id}>
-                  <Td>{game.id}</Td>
-                  <Td>
+                  {/* <Td>{game.id}</Td> */}
+                  {/* <Td>
                     <Text isTruncated maxW="200px">
                       {game.address}
                     </Text>
-                  </Td>
+                  </Td> */}
                   <Td>
                     <Link
                       as={NextLink}
                       href={`/${game.address}`}
                       color="blue.500"
                       _hover={{ color: 'blue.600', textDecoration: 'underline' }}>
-                      Join Game
+                      {game.address}
                     </Link>
                   </Td>
                 </Tr>
@@ -180,10 +209,28 @@ export default function Homepage() {
 
   return (
     <Box>
-      <VStack spacing={8} align="center" justify="center" minH="50vh">
-        <Text fontSize="xl">Create a new game of Go</Text>
-        <Button colorScheme="blue" onClick={createGame} isLoading={isLoading} loadingText="Creating game..." size="lg">
-          Start New Game
+      <VStack spacing={6} align="center" justify="center" minH="20vh">
+        <FormControl display="flex" flexDirection="column" alignItems="center">
+          <FormLabel>Opponent Address</FormLabel>
+          <Input
+            placeholder="0x..."
+            value={opponentAddress}
+            onChange={(e) => setOpponentAddress(e.target.value)}
+            width="400px"
+            mb={4}
+            textAlign="center"
+          />
+          <FormHelperText>Enter the wallet address of your opponent</FormHelperText>
+        </FormControl>
+
+        <Button
+          colorScheme="blue"
+          onClick={createGame}
+          isLoading={isLoading}
+          loadingText="Starting..."
+          size="lg"
+          isDisabled={!opponentAddress}>
+          Start Game
         </Button>
       </VStack>
 

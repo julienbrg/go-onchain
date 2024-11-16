@@ -1,51 +1,265 @@
 import { useRouter } from 'next/router'
-import { useEffect, useState, useCallback } from 'react'
-import { Box, VStack, Text } from '@chakra-ui/react'
+import { useEffect, useState } from 'react'
+import { Box, VStack, Text, Spinner, Button, HStack, useToast } from '@chakra-ui/react'
 import { Contract, BrowserProvider } from 'ethers'
 import { useAppKitAccount, useAppKitProvider } from '@reown/appkit/react'
 import GoAbi from '../utils/Go.json'
 
-interface GoBoardProps {
-  contractAddress?: string
+const lines = Array.from({ length: 19 }, (_, i) => i)
+const STONE_SIZE = 'calc(100% / 19 * 0.9)' // 90% of one grid unit
+const HOSHI_SIZE = 'calc(100% / 19 * 0.25)' // 25% of one grid unit
+
+interface GameState {
+  board: { [key: string]: 'purple' | 'blue' }
+  turn: string
+  capturedWhite: number
+  capturedBlack: number
+  whitePassedOnce: boolean
+  blackPassedOnce: boolean
+  moveCount: number // Add this to track total moves
 }
 
-const GoBoard = ({ contractAddress }: GoBoardProps) => {
-  const lines = Array.from({ length: 19 }, (_, i) => i)
-  const [stones, setStones] = useState<{ [key: string]: 'purple' | 'blue' }>({})
-  const [isBlueNext, setIsBlueNext] = useState(true)
+const INITIAL_STATE: GameState = {
+  board: {},
+  turn: '',
+  capturedWhite: 0,
+  capturedBlack: 0,
+  whitePassedOnce: false,
+  blackPassedOnce: false,
+  moveCount: 0, // Initialize moveCount
+}
 
-  const STONE_SIZE = 'calc(100% / 19 * 0.9)' // 90% of one grid unit
-  const HOSHI_SIZE = 'calc(100% / 19 * 0.25)' // 25% of one grid unit
+export default function GamePage() {
+  const router = useRouter()
+  const toast = useToast()
+  const { address } = useAppKitAccount()
+  const { walletProvider } = useAppKitProvider('eip155')
+  const [isValidGame, setIsValidGame] = useState(true)
+  const [loading, setLoading] = useState(true)
+  const [gameState, setGameState] = useState<GameState>(INITIAL_STATE)
+  const [contractAddress, setContractAddress] = useState<string>('')
+  const [isWhitePlayer, setIsWhitePlayer] = useState(false)
+  const [isBlackPlayer, setIsBlackPlayer] = useState(false)
+  const [nextStoneColor, setNextStoneColor] = useState<'blue' | 'purple'>('blue')
 
-  const handleIntersectionClick = useCallback(
-    (x: number, y: number) => {
-      const key = `${x}-${y}`
-      if (stones[key]) return // Already has a stone
+  // Initialize game and load initial state
+  useEffect(() => {
+    const initGame = async () => {
+      if (!router.query.address || typeof router.query.address !== 'string' || !walletProvider) return
 
-      setStones((prev) => ({
-        ...prev,
-        [key]: isBlueNext ? 'blue' : 'purple',
-      }))
-      setIsBlueNext(!isBlueNext)
-    },
-    [stones, isBlueNext]
-  )
+      try {
+        const ethersProvider = new BrowserProvider(walletProvider as any)
+        const contract = new Contract(router.query.address, GoAbi.abi, ethersProvider)
 
-  const getIntersectionStyle = useCallback(
-    (x: number, y: number) => {
-      const stone = stones[`${x}-${y}`]
-      if (!stone) return {}
+        try {
+          await contract.WIDTH()
+          setContractAddress(router.query.address)
+          setIsValidGame(true)
 
-      return {
-        backgroundColor: stone === 'blue' ? '#45a2f8' : '#8c1c84',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+          // Check if current user is a player
+          const [white, black] = await Promise.all([contract.white(), contract.black()])
+
+          setIsWhitePlayer(white.toLowerCase() === address?.toLowerCase())
+          setIsBlackPlayer(black.toLowerCase() === address?.toLowerCase())
+
+          await loadGameState(contract)
+        } catch {
+          setIsValidGame(false)
+          setLoading(false)
+        }
+      } catch (error) {
+        console.error('Error initializing game:', error)
+        setIsValidGame(false)
+        setLoading(false)
       }
-    },
-    [stones]
-  )
+    }
+
+    if (router.isReady) {
+      initGame()
+    }
+  }, [router.isReady, router.query.address, walletProvider, address])
+
+  // Load game state
+  const loadGameState = async (contract: Contract) => {
+    try {
+      const [turn, capturedWhite, capturedBlack, whitePassedOnce, blackPassedOnce] = await Promise.all([
+        contract.turn(),
+        contract.capturedWhiteStones(),
+        contract.capturedBlackStones(),
+        contract.whitePassedOnce(),
+        contract.blackPassedOnce(),
+      ])
+
+      const board: { [key: string]: 'purple' | 'blue' } = {}
+      let moveCount = 0
+
+      // Get intersections in chunks of 10 to avoid rate limiting
+      const chunks = Array(Math.ceil(361 / 10)).fill(0)
+      const intersectionPromises = chunks.map((_, chunkIndex) => {
+        const start = chunkIndex * 10
+        const end = Math.min(start + 10, 361)
+        return Promise.all(
+          Array(end - start)
+            .fill(0)
+            .map((_, i) => contract.intersections(start + i))
+        )
+      })
+
+      const intersectionChunks = await Promise.all(intersectionPromises)
+      const intersections = intersectionChunks.flat()
+
+      // Process intersections
+      intersections.forEach((intersection, i) => {
+        if (Number(intersection.state) !== 0) {
+          const x = i % 19
+          const y = Math.floor(i / 19)
+          const key = `${x}-${y}`
+          // State.Empty = 0, State.Black = 1, State.White = 2
+          board[key] = Number(intersection.state) === 1 ? 'blue' : 'purple'
+          moveCount++
+        }
+      })
+
+      setGameState({
+        board,
+        turn: turn.toLowerCase(),
+        capturedWhite: Number(capturedWhite),
+        capturedBlack: Number(capturedBlack),
+        whitePassedOnce,
+        blackPassedOnce,
+        moveCount,
+      })
+
+      setNextStoneColor(moveCount % 2 === 0 ? 'blue' : 'purple')
+      setLoading(false)
+    } catch (error) {
+      console.error('Error loading game state:', error)
+      toast({
+        title: 'Error loading game state',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+      setLoading(false)
+    }
+  }
+
+  // Set up event listeners
+  useEffect(() => {
+    if (!contractAddress || !walletProvider) return
+
+    const setupListeners = async () => {
+      const ethersProvider = new BrowserProvider(walletProvider as any)
+      const contract = new Contract(contractAddress, GoAbi.abi, ethersProvider)
+
+      contract.on('Move', (player, x, y) => {
+        loadGameState(contract)
+      })
+
+      contract.on('Capture', (player, count) => {
+        loadGameState(contract)
+      })
+
+      contract.on('End', (result, blackScore, whiteScore) => {
+        toast({
+          title: 'Game Over',
+          description: `${result}! Black: ${blackScore}, White: ${whiteScore}`,
+          status: 'info',
+          duration: null,
+          isClosable: true,
+        })
+        loadGameState(contract)
+      })
+    }
+
+    setupListeners()
+
+    return () => {
+      const contract = new Contract(contractAddress, GoAbi.abi, new BrowserProvider(walletProvider as any))
+      contract.removeAllListeners()
+    }
+  }, [contractAddress, walletProvider])
+
+  useEffect(() => {
+    if (gameState.board) {
+      const totalStones = Object.keys(gameState.board).length
+      setNextStoneColor(totalStones % 2 === 0 ? 'blue' : 'purple')
+    }
+  }, [gameState.board])
+
+  const handleIntersectionClick = async (x: number, y: number) => {
+    if (!contractAddress || !walletProvider || !address || !isMyTurn()) return
+
+    try {
+      const ethersProvider = new BrowserProvider(walletProvider as any)
+      const signer = await ethersProvider.getSigner()
+      const contract = new Contract(contractAddress, GoAbi.abi, signer)
+
+      const tx = await contract.play(x, y)
+      await tx.wait()
+
+      // The game state will be updated via the event listener
+    } catch (error: any) {
+      console.error('Error making move:', error)
+      toast({
+        title: 'Error making move',
+        description: error.message,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+    }
+  }
+
+  const handlePass = async () => {
+    if (!contractAddress || !walletProvider || !address || !isMyTurn()) return
+
+    try {
+      const ethersProvider = new BrowserProvider(walletProvider as any)
+      const signer = await ethersProvider.getSigner()
+      const contract = new Contract(contractAddress, GoAbi.abi, signer)
+
+      const tx = await contract.pass()
+      await tx.wait()
+    } catch (error: any) {
+      console.error('Error passing:', error)
+      toast({
+        title: 'Error passing turn',
+        description: error.message,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+    }
+  }
+
+  const isMyTurn = () => {
+    return gameState.turn === address?.toLowerCase()
+  }
+
+  if (!isValidGame) {
+    return (
+      <VStack spacing={4} align="center" justify="center" minH="50vh">
+        <Text>Invalid game address or game not found</Text>
+      </VStack>
+    )
+  }
+
+  if (loading) {
+    return (
+      <VStack spacing={4}>
+        <Spinner size="xl" />
+        <Text>Loading game state...</Text>
+      </VStack>
+    )
+  }
 
   return (
-    <VStack width="full" spacing={4} align="center">
+    <VStack spacing={6} align="center" width="full" p={4}>
+      {/* <Text fontSize="xl" fontWeight="bold">
+        Next move: {nextStoneColor === 'blue' ? 'Black' : 'White'}
+      </Text> */}
+
       <Box
         position="relative"
         width="full"
@@ -59,7 +273,7 @@ const GoBoard = ({ contractAddress }: GoBoardProps) => {
           touchAction: 'none',
         }}>
         <Box position="relative" width="full" height="full">
-          {/* Vertical lines */}
+          {/* Grid lines */}
           {lines.map((i) => (
             <Box
               key={`v-${i}`}
@@ -72,7 +286,6 @@ const GoBoard = ({ contractAddress }: GoBoardProps) => {
             />
           ))}
 
-          {/* Horizontal lines */}
           {lines.map((i) => (
             <Box
               key={`h-${i}`}
@@ -102,84 +315,66 @@ const GoBoard = ({ contractAddress }: GoBoardProps) => {
             ))
           )}
 
-          {/* Clickable intersections */}
+          {/* Stones and intersections */}
           {lines.map((y) =>
-            lines.map((x) => (
-              <Box
-                key={`intersection-${x}-${y}`}
-                position="absolute"
-                left={`${(x * 100) / 18}%`}
-                top={`${(y * 100) / 18}%`}
-                width={STONE_SIZE}
-                height={STONE_SIZE}
-                transform="translate(-50%, -50%)"
-                cursor="pointer"
-                onClick={() => handleIntersectionClick(x, y)}
-                _hover={{
-                  backgroundColor: stones[`${x}-${y}`] ? undefined : 'rgba(255,255,255,0.1)',
-                }}
-                _active={{
-                  transform: stones[`${x}-${y}`] ? 'translate(-50%, -50%)' : 'translate(-50%, -50%) scale(0.95)',
-                }}
-                borderRadius="full"
-                transition="background-color 0.1s"
-                {...getIntersectionStyle(x, y)}
-              />
-            ))
+            lines.map((x) => {
+              const key = `${x}-${y}`
+              const stone = gameState.board[key]
+
+              return (
+                <Box
+                  key={`intersection-${x}-${y}`}
+                  position="absolute"
+                  left={`${(x * 100) / 18}%`}
+                  top={`${(y * 100) / 18}%`}
+                  width={STONE_SIZE}
+                  height={STONE_SIZE}
+                  transform="translate(-50%, -50%)"
+                  cursor={!isWhitePlayer && !isBlackPlayer ? 'default' : stone ? 'not-allowed' : 'pointer'}
+                  onClick={() => !stone && (isWhitePlayer || isBlackPlayer) && handleIntersectionClick(x, y)}
+                  backgroundColor={stone === 'purple' ? '#8c1c84' : stone === 'blue' ? '#45a2f8' : undefined}
+                  _hover={{
+                    backgroundColor:
+                      !stone && (isWhitePlayer || isBlackPlayer)
+                        ? 'rgba(255,255,255,0.1)'
+                        : stone === 'purple'
+                          ? '#8c1c84'
+                          : stone === 'blue'
+                            ? '#45a2f8'
+                            : undefined,
+                  }}
+                  borderRadius="full"
+                  transition="all 0.2s"
+                  boxShadow={stone ? '0 2px 4px rgba(0,0,0,0.2)' : undefined}
+                  zIndex={1}
+                />
+              )
+            })
           )}
         </Box>
       </Box>
-    </VStack>
-  )
-}
 
-export default function GamePage() {
-  const router = useRouter()
-  const { address } = useAppKitAccount()
-  const { walletProvider } = useAppKitProvider('eip155')
-  const [gameContract, setGameContract] = useState<Contract | null>(null)
-  const [isValidGame, setIsValidGame] = useState(true)
-  const [contractAddress, setContractAddress] = useState<string>('')
+      {(isWhitePlayer || isBlackPlayer) && (
+        <HStack spacing={4}>
+          <Button colorScheme="blue" onClick={handlePass} isDisabled={!isMyTurn()}>
+            Pass
+          </Button>
+        </HStack>
+      )}
 
-  useEffect(() => {
-    const initGame = async () => {
-      if (!router.query.address || typeof router.query.address !== 'string') return
-
-      try {
-        const ethersProvider = new BrowserProvider(walletProvider as any)
-        const contract = new Contract(router.query.address, GoAbi.abi, ethersProvider)
-
-        // Basic validation - check if this is actually a Go contract
-        try {
-          await contract.WIDTH()
-          setGameContract(contract)
-          setContractAddress(router.query.address)
-          setIsValidGame(true)
-        } catch {
-          setIsValidGame(false)
-        }
-      } catch (error) {
-        console.error('Error initializing game:', error)
-        setIsValidGame(false)
-      }
-    }
-
-    if (router.isReady) {
-      initGame()
-    }
-  }, [router.isReady, router.query.address, walletProvider])
-
-  if (!isValidGame) {
-    return (
-      <VStack spacing={4} align="center" justify="center" minH="50vh">
-        <Text>Invalid game address or game not found</Text>
+      <VStack spacing={2}>
+        <Text>Black captures: {gameState.capturedBlack}</Text>
+        <Text>White captures: {gameState.capturedWhite}</Text>
       </VStack>
-    )
-  }
 
-  return (
-    <main>
-      <GoBoard contractAddress={contractAddress} />
-    </main>
+      <HStack spacing={4}>
+        <Text fontSize="sm" color="gray.500">
+          {gameState.blackPassedOnce ? 'Black passed' : ''}
+        </Text>
+        <Text fontSize="sm" color="gray.500">
+          {gameState.whitePassedOnce ? 'White passed' : ''}
+        </Text>
+      </HStack>
+    </VStack>
   )
 }
