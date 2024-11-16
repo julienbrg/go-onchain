@@ -1,5 +1,23 @@
 import { useState, useEffect } from 'react'
-import { Box, Button, VStack, Text, useToast, Table, Thead, Tbody, Tr, Th, Td, Link, Spinner } from '@chakra-ui/react'
+import {
+  Box,
+  Button,
+  VStack,
+  Text,
+  useToast,
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td,
+  Link,
+  Spinner,
+  Input,
+  FormControl,
+  FormLabel,
+  FormHelperText,
+} from '@chakra-ui/react'
 import { useRouter } from 'next/router'
 import { Contract, BrowserProvider } from 'ethers'
 import { useAppKitAccount, useAppKitProvider } from '@reown/appkit/react'
@@ -12,6 +30,7 @@ export default function Homepage() {
   const [isLoading, setIsLoading] = useState(false)
   const [games, setGames] = useState<{ address: string; id: number }[]>([])
   const [loadingGames, setLoadingGames] = useState(true)
+  const [opponentAddress, setOpponentAddress] = useState('')
   const router = useRouter()
   const toast = useToast()
   const { address, isConnected } = useAppKitAccount()
@@ -72,6 +91,19 @@ export default function Homepage() {
       return
     }
 
+    if (!opponentAddress) {
+      toast({
+        title: 'Missing opponent',
+        description: 'Please enter an opponent address',
+        status: 'error',
+        position: 'bottom',
+        variant: 'subtle',
+        duration: 9000,
+        isClosable: true,
+      })
+      return
+    }
+
     try {
       setIsLoading(true)
 
@@ -80,11 +112,9 @@ export default function Homepage() {
 
       const factory = new Contract(FACTORY_ADDRESS, GoFactoryAbi.abi, signer)
 
-      // Create game with current user as both players (for testing)
-      const tx = await factory.createGame(address, '0xD8a394e7d7894bDF2C57139fF17e5CBAa29Dd977')
+      const tx = await factory.createGame(address, opponentAddress)
       const receipt = await tx.wait()
 
-      // Find the GameCreated event
       const event = receipt.logs.find((log: any) => {
         try {
           return factory.interface.parseLog({ topics: log.topics, data: log.data })?.name === 'GameCreated'
@@ -100,7 +130,6 @@ export default function Homepage() {
         })
         const gameAddress = parsedEvent?.args?.gameAddress
 
-        // Redirect to game page
         router.push(`/${gameAddress}`)
       }
     } catch (error) {
@@ -180,9 +209,28 @@ export default function Homepage() {
 
   return (
     <Box>
-      <VStack spacing={3} align="center" justify="center" minH="20vh">
-        <Button colorScheme="blue" onClick={createGame} isLoading={isLoading} loadingText="Starting..." size="lg">
-          Start
+      <VStack spacing={6} align="center" justify="center" minH="20vh">
+        <FormControl display="flex" flexDirection="column" alignItems="center">
+          <FormLabel>Opponent Address</FormLabel>
+          <Input
+            placeholder="0x..."
+            value={opponentAddress}
+            onChange={(e) => setOpponentAddress(e.target.value)}
+            width="400px"
+            mb={4}
+            textAlign="center"
+          />
+          <FormHelperText>Enter the wallet address of your opponent</FormHelperText>
+        </FormControl>
+
+        <Button
+          colorScheme="blue"
+          onClick={createGame}
+          isLoading={isLoading}
+          loadingText="Starting..."
+          size="lg"
+          isDisabled={!opponentAddress}>
+          Start Game
         </Button>
       </VStack>
 
