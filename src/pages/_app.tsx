@@ -9,9 +9,9 @@ import { useIsMounted } from '../hooks/useIsMounted'
 import ErrorBoundary from '../components/ErrorBoundary'
 
 export default function App({ Component, pageProps }: AppProps) {
-  useEffect(() => {
-    console.log('contract address:', ERC20_CONTRACT_ADDRESS)
-  }, [])
+  // useEffect(() => {
+  //   console.log('contract address:', ERC20_CONTRACT_ADDRESS)
+  // }, [])
   const isMounted = useIsMounted()
 
   return (

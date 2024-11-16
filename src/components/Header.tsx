@@ -45,17 +45,17 @@ export function Header(props: Props) {
       </LinkComponent>
 
       <Spacer />
-      <Menu>
+      {/* <Menu>
         <MenuButton as={IconButton} aria-label="Options" icon={<HamburgerIcon />} size={'sm'} mr={4} />
         <MenuList>
           <LinkComponent href="/" invisible>
             <MenuItem fontSize="md">Home</MenuItem>
           </LinkComponent>
-          <LinkComponent href="/new" invisible>
-            <MenuItem fontSize="md">New</MenuItem>
+          <LinkComponent href="/start" invisible>
+            <MenuItem fontSize="md">Start Game</MenuItem>
           </LinkComponent>
         </MenuList>
-      </Menu>
+      </Menu> */}
       <Flex alignItems="center" gap={4}>
         <w3m-button />
         <Flex alignItems="center">
