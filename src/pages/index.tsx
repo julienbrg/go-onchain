@@ -6,7 +6,7 @@ import { useAppKitAccount, useAppKitProvider } from '@reown/appkit/react'
 import GoFactoryAbi from '../utils/GoFactory.json'
 import NextLink from 'next/link'
 
-const FACTORY_ADDRESS = '0x8142F414462f8d17060C4b5a60b8C1a06B75040F'
+const FACTORY_ADDRESS = GoFactoryAbi.address
 
 export default function Homepage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -139,34 +139,34 @@ export default function Homepage() {
 
     return (
       <VStack spacing={4} mt={8} width="full">
-        <Text fontSize="xl" fontWeight="bold">
+        {/* <Text fontSize="xl" fontWeight="bold">
           Existing Games
-        </Text>
+        </Text> */}
         <Box width="full" overflowX="auto">
           <Table variant="simple">
             <Thead>
               <Tr>
-                <Th>Game ID</Th>
-                <Th>Contract Address</Th>
-                <Th>Action</Th>
+                {/* <Th>Game ID</Th> */}
+                <Th>Existing Games</Th>
+                {/* <Th>Action</Th> */}
               </Tr>
             </Thead>
             <Tbody>
               {games.map((game) => (
                 <Tr key={game.id}>
-                  <Td>{game.id}</Td>
-                  <Td>
+                  {/* <Td>{game.id}</Td> */}
+                  {/* <Td>
                     <Text isTruncated maxW="200px">
                       {game.address}
                     </Text>
-                  </Td>
+                  </Td> */}
                   <Td>
                     <Link
                       as={NextLink}
                       href={`/${game.address}`}
                       color="blue.500"
                       _hover={{ color: 'blue.600', textDecoration: 'underline' }}>
-                      Join Game
+                      {game.address}
                     </Link>
                   </Td>
                 </Tr>
@@ -181,9 +181,8 @@ export default function Homepage() {
   return (
     <Box>
       <VStack spacing={8} align="center" justify="center" minH="50vh">
-        <Text fontSize="xl">Create a new game of Go</Text>
-        <Button colorScheme="blue" onClick={createGame} isLoading={isLoading} loadingText="Creating game..." size="lg">
-          Start New Game
+        <Button colorScheme="blue" onClick={createGame} isLoading={isLoading} loadingText="Starting..." size="lg">
+          Start
         </Button>
       </VStack>
 
