@@ -81,7 +81,7 @@ export default function Homepage() {
       const factory = new Contract(FACTORY_ADDRESS, GoFactoryAbi.abi, signer)
 
       // Create game with current user as both players (for testing)
-      const tx = await factory.createGame(address, address)
+      const tx = await factory.createGame(address, '0xD8a394e7d7894bDF2C57139fF17e5CBAa29Dd977')
       const receipt = await tx.wait()
 
       // Find the GameCreated event
@@ -122,7 +122,7 @@ export default function Homepage() {
   const renderGamesList = () => {
     if (loadingGames) {
       return (
-        <VStack spacing={4} mt={8}>
+        <VStack spacing={2} mt={8}>
           <Spinner size="xl" />
           <Text>Loading games...</Text>
         </VStack>
@@ -131,14 +131,14 @@ export default function Homepage() {
 
     if (games.length === 0) {
       return (
-        <VStack spacing={4} mt={8}>
+        <VStack spacing={2} mt={8}>
           <Text>No games found. Start a new game above!</Text>
         </VStack>
       )
     }
 
     return (
-      <VStack spacing={4} mt={8} width="full">
+      <VStack spacing={2} mt={8} width="full">
         {/* <Text fontSize="xl" fontWeight="bold">
           Existing Games
         </Text> */}
@@ -180,7 +180,7 @@ export default function Homepage() {
 
   return (
     <Box>
-      <VStack spacing={8} align="center" justify="center" minH="50vh">
+      <VStack spacing={3} align="center" justify="center" minH="20vh">
         <Button colorScheme="blue" onClick={createGame} isLoading={isLoading} loadingText="Starting..." size="lg">
           Start
         </Button>

@@ -16,6 +16,7 @@ interface GameState {
   capturedBlack: number
   whitePassedOnce: boolean
   blackPassedOnce: boolean
+  moveCount: number // Add this to track total moves
 }
 
 const INITIAL_STATE: GameState = {
@@ -25,6 +26,7 @@ const INITIAL_STATE: GameState = {
   capturedBlack: 0,
   whitePassedOnce: false,
   blackPassedOnce: false,
+  moveCount: 0, // Initialize moveCount
 }
 
 export default function GamePage() {
@@ -38,6 +40,7 @@ export default function GamePage() {
   const [contractAddress, setContractAddress] = useState<string>('')
   const [isWhitePlayer, setIsWhitePlayer] = useState(false)
   const [isBlackPlayer, setIsBlackPlayer] = useState(false)
+  const [nextStoneColor, setNextStoneColor] = useState<'blue' | 'purple'>('blue')
 
   // Initialize game and load initial state
   useEffect(() => {
@@ -88,6 +91,7 @@ export default function GamePage() {
       ])
 
       const board: { [key: string]: 'purple' | 'blue' } = {}
+      let moveCount = 0
 
       // Get intersections in chunks of 10 to avoid rate limiting
       const chunks = Array(Math.ceil(361 / 10)).fill(0)
@@ -103,19 +107,16 @@ export default function GamePage() {
 
       const intersectionChunks = await Promise.all(intersectionPromises)
       const intersections = intersectionChunks.flat()
-      console.log('First few intersections:', intersections.slice(0, 5))
 
-      // In loadGameState function, modify this part:
+      // Process intersections
       intersections.forEach((intersection, i) => {
-        // Add console.log to debug the state values
-        console.log(`Intersection ${i} state:`, Number(intersection.state))
-
         if (Number(intersection.state) !== 0) {
-          // Explicitly convert to number and check for non-empty
           const x = i % 19
           const y = Math.floor(i / 19)
           const key = `${x}-${y}`
-          board[key] = Number(intersection.state) === 1 ? 'purple' : 'blue'
+          // State.Empty = 0, State.Black = 1, State.White = 2
+          board[key] = Number(intersection.state) === 1 ? 'blue' : 'purple'
+          moveCount++
         }
       })
 
@@ -126,8 +127,10 @@ export default function GamePage() {
         capturedBlack: Number(capturedBlack),
         whitePassedOnce,
         blackPassedOnce,
+        moveCount,
       })
 
+      setNextStoneColor(moveCount % 2 === 0 ? 'blue' : 'purple')
       setLoading(false)
     } catch (error) {
       console.error('Error loading game state:', error)
@@ -177,6 +180,13 @@ export default function GamePage() {
     }
   }, [contractAddress, walletProvider])
 
+  useEffect(() => {
+    if (gameState.board) {
+      const totalStones = Object.keys(gameState.board).length
+      setNextStoneColor(totalStones % 2 === 0 ? 'blue' : 'purple')
+    }
+  }, [gameState.board])
+
   const handleIntersectionClick = async (x: number, y: number) => {
     if (!contractAddress || !walletProvider || !address || !isMyTurn()) return
 
@@ -187,6 +197,8 @@ export default function GamePage() {
 
       const tx = await contract.play(x, y)
       await tx.wait()
+
+      // The game state will be updated via the event listener
     } catch (error: any) {
       console.error('Error making move:', error)
       toast({
@@ -245,7 +257,7 @@ export default function GamePage() {
   return (
     <VStack spacing={6} align="center" width="full" p={4}>
       {/* <Text fontSize="xl" fontWeight="bold">
-        {isMyTurn() ? 'Your turn!' : 'Waiting for opponent...'}
+        Next move: {nextStoneColor === 'blue' ? 'Black' : 'White'}
       </Text> */}
 
       <Box
