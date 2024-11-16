@@ -1,7 +1,15 @@
-import React, { useState, useCallback } from 'react'
-import { Box, VStack } from '@chakra-ui/react'
+import { useRouter } from 'next/router'
+import { useEffect, useState, useCallback } from 'react'
+import { Box, VStack, Text } from '@chakra-ui/react'
+import { Contract, BrowserProvider } from 'ethers'
+import { useAppKitAccount, useAppKitProvider } from '@reown/appkit/react'
+import GoAbi from '../utils/Go.json'
 
-const GoBoard = () => {
+interface GoBoardProps {
+  contractAddress?: string
+}
+
+const GoBoard = ({ contractAddress }: GoBoardProps) => {
   const lines = Array.from({ length: 19 }, (_, i) => i)
   const [stones, setStones] = useState<{ [key: string]: 'purple' | 'blue' }>({})
   const [isBlueNext, setIsBlueNext] = useState(true)
@@ -48,7 +56,6 @@ const GoBoard = () => {
         p={4}
         userSelect="none"
         sx={{
-          // Use sx prop for CSS properties not directly supported by Chakra
           touchAction: 'none',
         }}>
         <Box position="relative" width="full" height="full">
@@ -126,4 +133,53 @@ const GoBoard = () => {
   )
 }
 
-export default GoBoard
+export default function GamePage() {
+  const router = useRouter()
+  const { address } = useAppKitAccount()
+  const { walletProvider } = useAppKitProvider('eip155')
+  const [gameContract, setGameContract] = useState<Contract | null>(null)
+  const [isValidGame, setIsValidGame] = useState(true)
+  const [contractAddress, setContractAddress] = useState<string>('')
+
+  useEffect(() => {
+    const initGame = async () => {
+      if (!router.query.address || typeof router.query.address !== 'string') return
+
+      try {
+        const ethersProvider = new BrowserProvider(walletProvider as any)
+        const contract = new Contract(router.query.address, GoAbi.abi, ethersProvider)
+
+        // Basic validation - check if this is actually a Go contract
+        try {
+          await contract.WIDTH()
+          setGameContract(contract)
+          setContractAddress(router.query.address)
+          setIsValidGame(true)
+        } catch {
+          setIsValidGame(false)
+        }
+      } catch (error) {
+        console.error('Error initializing game:', error)
+        setIsValidGame(false)
+      }
+    }
+
+    if (router.isReady) {
+      initGame()
+    }
+  }, [router.isReady, router.query.address, walletProvider])
+
+  if (!isValidGame) {
+    return (
+      <VStack spacing={4} align="center" justify="center" minH="50vh">
+        <Text>Invalid game address or game not found</Text>
+      </VStack>
+    )
+  }
+
+  return (
+    <main>
+      <GoBoard contractAddress={contractAddress} />
+    </main>
+  )
+}
