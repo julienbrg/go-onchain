@@ -249,7 +249,7 @@ export default function GamePage() {
     return (
       <VStack spacing={4}>
         <Spinner size="xl" />
-        <Text>Loading game state...</Text>
+        <Text>Loading game...</Text>
       </VStack>
     )
   }
@@ -356,7 +356,7 @@ export default function GamePage() {
 
       {(isWhitePlayer || isBlackPlayer) && (
         <HStack spacing={4}>
-          <Button colorScheme="blue" onClick={handlePass} isDisabled={!isMyTurn()}>
+          <Button colorScheme="blue" onClick={handlePass} isDisabled={!isMyTurn()} mt={50}>
             Pass
           </Button>
         </HStack>

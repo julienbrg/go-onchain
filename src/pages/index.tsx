@@ -150,6 +150,13 @@ export default function Homepage() {
 
   const renderGamesList = () => {
     if (loadingGames) {
+      if (!walletProvider) {
+        return (
+          <VStack spacing={2} mt={8}>
+            <Text>Please connect your wallet.</Text>
+          </VStack>
+        )
+      }
       return (
         <VStack spacing={2} mt={8}>
           <Spinner size="xl" />

@@ -2,20 +2,7 @@
 import React, { ReactNode, createContext, useContext } from 'react'
 import { createAppKit, useAppKitProvider } from '@reown/appkit/react'
 import { EthersAdapter } from '@reown/appkit-adapter-ethers'
-import {
-  sepolia,
-  optimism,
-  zksync,
-  base,
-  arbitrum,
-  gnosis,
-  polygon,
-  polygonZkEvm,
-  mantle,
-  celo,
-  avalanche,
-  degen,
-} from '@reown/appkit/networks'
+import { sepolia, mantle } from '@reown/appkit/networks'
 
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || ''
 
@@ -31,7 +18,7 @@ const metadata = {
 createAppKit({
   adapters: [new EthersAdapter()],
   metadata,
-  networks: [sepolia, optimism, zksync, base, arbitrum, gnosis, polygon, polygonZkEvm, mantle, celo, avalanche, degen],
+  networks: [sepolia, mantle],
   defaultNetwork: sepolia,
   projectId,
   features: {
